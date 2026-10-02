@@ -10,9 +10,27 @@ An end-to-end SQL and machine learning project on the Olist Brazilian e-commerce
 
 ## Pipeline
 
-`raw` (CSVs loaded as-is) → `staging` (cleaned, one row per key) → `analytics.orders_enriched` (one row per order)
+```mermaid
+flowchart LR
+  A["Kaggle CSVs (9 files)"] -->|manual upload| B[("raw")]
+  B -->|"sql/03 to 07"| C[("staging")]
+  C -->|"sql/09"| D[("analytics.orders_enriched")]
+  D -.->|planned| E["Power BI dashboard"]
+  D -.->|planned| F["ML model"]
+```
 
 All transformations are SQL scripts in `sql/`, numbered in run order.
+
+## Rebuild
+
+Everything above `raw` can be rebuilt with one command (requires a BigQuery login and the nine raw tables):
+
+```
+pip install -r requirements.txt
+python scripts/rebuild.py
+```
+
+The script runs the staging and analytics SQL in order, then checks the final table against the verified totals (99,441 orders, 13,591,643.70 item revenue) and stops with an error if they don't match.
 
 ## Data quality findings and decisions
 
@@ -33,4 +51,4 @@ All transformations are SQL scripts in `sql/`, numbered in run order.
 - [ ] SQL analysis: revenue trends, cohort retention, delivery and seller performance
 - [ ] Power BI dashboard
 - [ ] ML model (prediction target to be decided) with baseline comparison
-- [ ] One-command rebuild script
+- [x] One-command rebuild script
