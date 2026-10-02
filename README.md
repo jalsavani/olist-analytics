@@ -23,14 +23,20 @@ All transformations are SQL scripts in `sql/`, numbered in run order.
 
 ## Rebuild
 
-Everything above `raw` can be rebuilt with one command (requires a BigQuery login and the nine raw tables):
+The project can be recreated from this repo plus the Kaggle download (requires a Google Cloud project with BigQuery and a local login via `gcloud auth application-default login`).
+
+1. Download the [dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) from Kaggle and place the 9 CSV files in `data/`.
+2. Run the pipeline:
 
 ```
 pip install -r requirements.txt
+python scripts/load_raw.py
 python scripts/rebuild.py
 ```
 
-The script runs the staging and analytics SQL in order, then checks the final table against the verified totals (99,441 orders, 13,591,643.70 item revenue) and stops with an error if they don't match.
+`load_raw.py` loads the nine CSVs into the `raw` dataset. `rebuild.py` runs the staging and analytics SQL in order, then checks the final table against the verified totals (99,441 orders, 13,591,643.70 item revenue) and stops with an error if they don't match.
+
+Note: `sql/00_setup.sql` creates the `raw`, `staging`, and `analytics` datasets and has to be run once before the first load. `sql/01a_raw_column_fixes.sql` is only needed for tables uploaded by hand through the BigQuery console.
 
 ## Data quality findings and decisions
 
