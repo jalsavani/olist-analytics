@@ -21,7 +21,8 @@ ORDER BY late_pct DESC;
 
 
 -- @export: delivery_by_month
--- Late rate over time. Months with very few orders are noisy.
+-- Late rate over time. Months with fewer than 500 delivered orders are dropped because
+-- their percentages are meaningless (for example one order in Sep 2016 would read as 100 percent late).
 SELECT
   purchase_month,
   COUNT(*) AS delivered_orders,
@@ -30,6 +31,7 @@ SELECT
 FROM `olist-analytics-510317.analytics.orders_enriched`
 WHERE has_valid_delivery
 GROUP BY purchase_month
+HAVING COUNT(*) >= 500
 ORDER BY purchase_month;
 
 

@@ -10,11 +10,27 @@
 -- Comments inside an exported query must not contain semicolons.
 
 -- @export: cohort_retention
-WITH customer_orders AS (
+-- The dataset ends partway through Sep 2018 (1 order that month). Without a cutoff, every cohort
+-- would show a fake drop to roughly 0 percent at the offset that lands on Sep 2018 or later.
+-- last_full_month is the latest month with at least 500 orders, and nothing after it is counted,
+-- so cohort and offset combinations beyond the data simply have no row.
+WITH last_full_month AS (
+  SELECT MAX(purchase_month) AS month
+  FROM (
+    SELECT purchase_month
+    FROM `olist-analytics-510317.analytics.orders_enriched`
+    WHERE has_items
+      AND order_status NOT IN ('canceled', 'unavailable')
+    GROUP BY purchase_month
+    HAVING COUNT(*) >= 500
+  )
+),
+customer_orders AS (
   SELECT customer_unique_id, order_id, purchase_month
   FROM `olist-analytics-510317.analytics.orders_enriched`
   WHERE has_items
     AND order_status NOT IN ('canceled', 'unavailable')
+    AND purchase_month <= (SELECT month FROM last_full_month)
 ),
 first_purchase AS (
   SELECT customer_unique_id, MIN(purchase_month) AS cohort_month

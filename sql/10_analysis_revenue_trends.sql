@@ -10,6 +10,10 @@
 -- Comments inside an exported query must not contain semicolons.
 
 -- @export: monthly_revenue
+-- Only months with at least 500 orders are reported. In the real data, 2016 has tiny volumes
+-- (2 orders in Sep, 290 in Oct, none in Nov, 1 in Dec) and Sep 2018 has 1 order, so growth rates
+-- computed against those months are meaningless (thousands of percent). The IF() below also
+-- blanks the growth value whenever the previous row is not the immediately preceding month.
 WITH monthly AS (
   SELECT
     purchase_month,
@@ -20,19 +24,23 @@ WITH monthly AS (
   WHERE has_items
     AND order_status NOT IN ('canceled', 'unavailable')
   GROUP BY purchase_month
+  HAVING COUNT(*) >= 500
 )
 SELECT
   *,
-  ROUND(100 * SAFE_DIVIDE(
-    revenue - LAG(revenue) OVER (ORDER BY purchase_month),
-    LAG(revenue) OVER (ORDER BY purchase_month)
-  ), 1) AS mom_growth_pct
+  IF(
+    DATE_DIFF(purchase_month, LAG(purchase_month) OVER (ORDER BY purchase_month), MONTH) = 1,
+    ROUND(100 * SAFE_DIVIDE(
+      revenue - LAG(revenue) OVER (ORDER BY purchase_month),
+      LAG(revenue) OVER (ORDER BY purchase_month)
+    ), 1),
+    NULL
+  ) AS mom_growth_pct
 FROM monthly
 ORDER BY purchase_month;
 
--- Note for interpretation: the first and last months of the dataset can be partial,
--- so check them before quoting growth rates. Look at the earliest and latest rows
--- of the result and compare their order counts with the months around them.
+-- Note for interpretation: with the 500-order rule the result covers Jan 2017 to Aug 2018.
+-- The first month has no growth value because there is no earlier month to compare with.
 
 
 -- @export: revenue_by_category
