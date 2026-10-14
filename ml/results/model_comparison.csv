@@ -2,4 +2,4 @@ model,cv_pr_auc_mean,cv_pr_auc_std,roc_auc,pr_auc,late_rate_test,top10_flagged_o
 baseline_prior,0.0834,0.0478,0.5,0.0349,0.0349,1929,0.0052,0.0148,0.1484,False
 logistic_estimated_days_only,0.0782,0.0418,0.7503,0.1203,0.0349,1929,0.1431,0.4095,4.0958,False
 logistic_regression,0.1615,0.0892,0.7066,0.0764,0.0349,1929,0.0793,0.227,2.2705,True
-hist_gradient_boosting,0.1488,0.0757,0.6956,0.0646,0.0349,1929,0.0715,0.2047,2.0479,False
+hist_gradient_boosting,0.1477,0.0757,0.6951,0.066,0.0349,1929,0.0741,0.2122,2.1221,False

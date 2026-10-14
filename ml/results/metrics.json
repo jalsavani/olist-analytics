@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-14T14:11:07+00:00",
+  "generated_at_utc": "2026-10-14T15:07:23+00:00",
   "rows": 96470,
   "train_rows": 77176,
   "test_rows": 19294,
@@ -57,15 +57,15 @@
     },
     {
       "model": "hist_gradient_boosting",
-      "cv_pr_auc_mean": 0.1488,
+      "cv_pr_auc_mean": 0.1477,
       "cv_pr_auc_std": 0.0757,
-      "roc_auc": 0.6956,
-      "pr_auc": 0.0646,
+      "roc_auc": 0.6951,
+      "pr_auc": 0.066,
       "late_rate_test": 0.0349,
       "top10_flagged_orders": 1929,
-      "top10_precision": 0.0715,
-      "top10_recall": 0.2047,
-      "top10_lift": 2.0479,
+      "top10_precision": 0.0741,
+      "top10_recall": 0.2122,
+      "top10_lift": 2.1221,
       "selected_by_cv": false
     }
   ]
