@@ -1,145 +1,136 @@
 # Olist E-Commerce Analytics
 
-An end-to-end SQL and machine learning project on the Olist Brazilian e-commerce dataset, built on Google BigQuery. The goal: turn nine messy relational tables into a clean, trustworthy, one-row-per-order table that supports business analysis and a prediction model.
+I wanted a project that used the SQL and machine learning I learned on Kaggle on something messier than a clean practice dataset. Olist is a Brazilian marketplace that published about 100k real orders, split across nine tables. I loaded them into BigQuery, cleaned them into one row per order, answered some business questions with SQL, built a small dashboard, and trained a model to predict which orders will arrive late.
 
-**Status:** complete. Pipeline, SQL analysis, dashboard and late-delivery model are built, and results are in `dashboard/data/` and `ml/results/`. See [Findings](#findings) and [Late-delivery model](#late-delivery-model).
+The most useful thing I learned was how much of the work is checking that the numbers are right. A few of those checks changed my results, and they are listed in [Data quality](#data-quality-and-the-decisions-i-made).
 
 ## Data
 
-[Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) from Kaggle: 9 CSV files, 99,441 orders. The raw CSVs are not stored in this repo; download them from Kaggle and load them into a `raw` dataset in BigQuery.
+[Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) from Kaggle: 9 CSV files, 99,441 orders from 2016 to 2018. The CSVs aren't in this repo. Download them from Kaggle and put them in a `data/` folder.
 
-## Pipeline
+## How it fits together
 
 ```mermaid
 flowchart LR
-  A["Kaggle CSVs (9 files)"] -->|"scripts/load_raw.py"| B[("raw")]
+  A["Kaggle CSVs"] -->|"scripts/load_raw.py"| B[("raw")]
   B -->|"sql/03 to 07"| C[("staging")]
   C -->|"sql/09"| D[("analytics.orders_enriched")]
   D -->|"sql/10 to 13"| G["Analysis queries"]
   G -->|"scripts/export_dashboard_data.py"| H["dashboard/data/*.csv"]
   H --> E["Streamlit dashboard"]
   D -->|"sql/14"| I[("analytics.late_delivery_features")]
-  I -->|"ml/train_late_delivery.py"| F["Model + results in ml/results"]
+  I -->|"ml/train_late_delivery.py"| F["Model results in ml/results"]
   F --> E
 ```
 
-All transformations are SQL scripts in `sql/`, numbered in run order.
+Everything between the raw tables and the dashboard is SQL, in numbered files under `sql/` so you can see the order they run in.
 
-## Rebuild
+## Running it yourself
 
-The project can be recreated from this repo plus the Kaggle download (requires a Google Cloud project with BigQuery and a local login via `gcloud auth application-default login`).
+You need a Google Cloud project with BigQuery turned on, and a local login:
 
-1. Download the [dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) from Kaggle and place the 9 CSV files in `data/`.
-2. Run the pipeline:
+```
+gcloud auth application-default login
+```
+
+Then:
 
 ```
 pip install -r requirements.txt
-python scripts/load_raw.py
-python scripts/rebuild.py
+python scripts/load_raw.py        # loads the nine CSVs into the raw dataset
+python scripts/rebuild.py         # builds staging and analytics tables, then checks them
 ```
 
-`load_raw.py` loads the nine CSVs into the `raw` dataset. `rebuild.py` runs the staging and analytics SQL in order, then checks the final table against the verified totals (99,441 orders, 13,591,643.70 item revenue) and stops with an error if they don't match.
+Run `sql/00_setup.sql` once first to create the `raw`, `staging` and `analytics` datasets. The project ID in the SQL files is mine (`olist-analytics-510317`), so search and replace it with yours.
 
-Note: `sql/00_setup.sql` creates the `raw`, `staging`, and `analytics` datasets and has to be run once before the first load. `sql/01a_raw_column_fixes.sql` is only needed for tables uploaded by hand through the BigQuery console.
+`rebuild.py` finishes by checking the final table against totals I verified by hand (99,441 orders and 13,591,643.70 in item revenue). If they don't match, it stops with an error instead of quietly producing wrong numbers.
 
-## Run the analysis
-
-After the rebuild above has passed:
+To produce the analysis outputs and open the dashboard:
 
 ```
-python scripts/export_dashboard_data.py     # runs the analysis queries, writes dashboard/data/*.csv
-python ml/train_late_delivery.py            # builds the feature table, trains, writes ml/results/
-streamlit run app/streamlit_app.py          # opens the dashboard
-python tests/test_ml_smoke.py               # optional: checks the ML code on synthetic data, no BigQuery needed
+python scripts/export_dashboard_data.py
+python ml/train_late_delivery.py
+streamlit run app/streamlit_app.py
 ```
 
-What each piece answers:
+There's also a small test that runs the ML code on made-up data, so it works without BigQuery: `python tests/test_ml_smoke.py`.
 
-| Script | Question |
-|---|---|
-| `sql/10_analysis_revenue_trends.sql` | How does revenue move month to month, and which categories and states drive it? |
-| `sql/11_analysis_cohort_retention.sql` | What share of customers come back, cohort by cohort? |
-| `sql/12_analysis_delivery_performance.sql` | Where and when are deliveries late, and does lateness hurt review scores? |
-| `sql/13_analysis_seller_performance.sql` | Which sellers drive revenue, and how concentrated is it? |
-| `sql/14_ml_late_delivery_features.sql` | What is known at purchase time that could predict a late delivery? |
+BigQuery's free sandbox deletes tables after 60 days, so rerun the load and rebuild if they've disappeared.
 
-## Findings
+## What the analysis found
 
-All figures come from the queries in `sql/10` to `sql/13` (exported to `dashboard/data/`). Revenue means item price, excluding freight and canceled or unavailable orders. Trend figures cover Jan 2017 to Aug 2018, because 2016 and Sep 2018 have too few orders to read (see the data quality table).
+Revenue here means item price, without freight, and leaves out canceled or unavailable orders. Trends cover Jan 2017 to Aug 2018. Before and after that, the dataset has too few orders to say anything.
 
-- **Revenue grew through 2017 and then held at a plateau.** Item revenue was 13.45M over 97,905 orders (average order 137.37). November 2017 was the peak at about 1.00M, up 52.1% on October. In Jan to Aug 2018 monthly revenue stayed between 0.84M and 0.99M, and August 2018 was 1.49x August 2017. The biggest categories were health_beauty (1.26M), watches_gifts (1.20M) and bed_bath_table (1.04M).
-- **Few customers come back.** Only 3.04% of customers (2,887 of 94,983) ordered more than once. In cohorts of 1,000+ customers, between 0.22% and 0.71% ordered again in the following month.
-- **Revenue is concentrated in a small group of sellers.** The top 10% of sellers earn 67.5% of revenue and the top 20% earn 82.6%. The bottom half together earn 3.3%.
-- **Late delivery wrecks reviews.** Orders delivered late average a 2.27 review score against 4.29 for on-time orders, and 62.4% of late orders get a low score (2 or below) against 9.2% of on-time orders.
-- **Lateness is concentrated in time and place.** Overall 6.77% of delivered orders were late, but the monthly rate hit 12.4% in Nov 2017, 14.1% in Feb 2018 and 19.0% in Mar 2018, then fell to 1.2% by Jun 2018. By state, Alagoas had the highest late rate at 21.4% (median delivery 22 days), then Maranhao at 17.4% and Sergipe at 15.2%, against 4.5% and a 7-day median in Sao Paulo.
+- **Revenue grew through 2017, then leveled off.** Total item revenue was 13.45M across 97,905 orders, about 137 per order. November 2017 was the best month at roughly 1.00M. Through 2018 it stayed between 0.84M and 0.99M a month. The biggest categories were health_beauty (1.26M), watches_gifts (1.20M) and bed_bath_table (1.04M).
+- **Almost nobody orders twice.** Only 3.04% of customers (2,887 of 94,983) came back for a second order. In the larger monthly cohorts, under 1% ordered again the following month.
+- **A small group of sellers earns most of the money.** The top 10% of sellers bring in 67.5% of revenue. The bottom half share 3.3%.
+- **Late deliveries wreck reviews.** Late orders average a 2.27 review score, against 4.29 for on-time orders. 62% of late orders get a score of 2 or lower, compared with 9% of on-time ones.
+- **Lateness clusters in certain places and months.** Overall, 6.77% of delivered orders were late. By month it peaked at 19.0% in March 2018 and fell to 1.2% by June. By state, Alagoas was worst at 21.4% (median delivery of 22 days), against 4.5% and a 7-day median in Sao Paulo.
 
-## Late-delivery model
+All of these come from `sql/10` to `sql/13`, and the exported tables are in `dashboard/data/`.
 
-Goal: flag orders likely to arrive late at the moment they are placed.
+## Predicting late deliveries
 
-- **Features** use only information available at purchase time (seller to customer distance, estimated delivery days, weight and size, order value, payment, location, timing). Review scores, carrier dates and actual delivery time are excluded on purpose because they would leak the answer.
-- **Split** is by time: the earliest 80 percent of orders train the model and the latest 20 percent test it. A random split would let the model see the future.
-- **Baselines**: always predicting the training late rate, and a one-feature model on the estimated delivery days. The full models have to beat both.
-- **Metric**: PR AUC, because late orders are a minority. Precision and recall for the riskiest 10 percent of orders show how it would work as a review queue.
-- **Error analysis**: calibration by risk decile and by state, plus permutation feature importance.
+The question: at the moment someone places an order, can we tell whether it will arrive late?
 
-Output files are in `ml/results/` (`metrics.json`, `model_comparison.csv`, `decile_table.csv`, `state_error_analysis.csv`, `permutation_importance.csv`, `pr_curves.png`).
+How I set it up:
+
+- **Features only from purchase time.** Distance between seller and customer, the estimated delivery days Olist showed the customer, item weight and size, order value, payment type, state, and time of purchase. I left out review scores and anything from the shipping process, since those wouldn't be known yet and would give the answer away.
+- **Split by time, not at random.** The earliest 80% of orders train the model and the latest 20% test it, which is closer to how it would be used. A random split lets the model peek at the future.
+- **Two simple baselines to beat.** One always predicts the average late rate. The other uses only the estimated delivery days.
+- **PR AUC as the main score**, because only about 7% of orders are late and accuracy would look great even for a useless model. I also check how well it does when it flags only its riskiest 10% of orders.
+- **Model choice by cross-validation.** I picked the best model using the training period only, and report test results for all of them.
 
 ### Results
 
-Trained on 77,176 orders up to 26 May 2018 and tested on the 19,294 orders after that. The late rate fell from 7.6% in the training period to 3.5% in the test period.
+Trained on 77,176 orders up to 26 May 2018 and tested on the 19,294 after that. The late rate dropped from 7.6% in training to 3.5% in testing.
 
-| Model | Cross-validated PR AUC (training period) | Test PR AUC | Test ROC AUC | Late orders caught in riskiest 10% | Lift |
+| Model | Cross-validated PR AUC | Test PR AUC | Test ROC AUC | Late orders caught in riskiest 10% | Lift |
 |---|---|---|---|---|---|
-| Always predict the training late rate | 0.083 | 0.035 | 0.500 | 1.5% | 0.1x |
-| Logistic regression, estimated delivery days only | 0.078 | 0.120 | 0.750 | 40.9% | 4.1x |
-| Logistic regression, all features (selected) | 0.162 | 0.076 | 0.707 | 22.7% | 2.3x |
+| Always predict the average late rate | 0.083 | 0.035 | 0.500 | 1.5% | 0.1x |
+| Logistic regression, estimated days only | 0.078 | 0.120 | 0.750 | 40.9% | 4.1x |
+| Logistic regression, all features (picked by CV) | 0.162 | 0.076 | 0.707 | 22.7% | 2.3x |
 | Gradient boosting, all features | 0.149 | 0.065 | 0.696 | 20.5% | 2.0x |
 
-What this shows:
+The honest takeaway is that the fancier models did not win. Using every feature roughly doubled the cross-validation score, but on the later test period the one-feature model was better than both of them.
 
-- **The richer models win in validation but lose on later data.** Inside the training period, using all features roughly doubles the cross-validated PR AUC compared with the baselines. On the final held-out period the one-feature model beats them.
-- **A simple rule is genuinely useful.** Flagging the 10% of orders with the shortest estimated delivery windows catches 41% of late orders, 4.1 times better than flagging at random.
-- **Likely reason (a hypothesis, not proven here): conditions changed.** The training period contains the Nov 2017 to Mar 2018 delay spike and the test period is calm. The all-features model over-predicts lateness in test for several northeastern states (for example it predicts 24% for Alagoas against 6% actual), which fits that explanation. `ml/results/state_error_analysis.csv` has the full breakdown.
-- **Model choice used validation data only.** The all-features logistic regression was selected by its cross-validation score alone. Test results are reported for every model, and no hyperparameters were tuned against the test period.
+My best guess is that conditions changed. The training period includes the big delay spike from Nov 2017 to Mar 2018, and the test period is calm. The all-features model expects far more late orders in some northeastern states than actually happened (it predicted 24% for Alagoas against 6% real). I haven't proven that's the cause. The per-state numbers are in `ml/results/state_error_analysis.csv` if you want to check.
 
-Next steps if this were going to production: retrain on a rolling window, monitor the late rate for drift, and test whether features that describe the delivery network (carrier capacity, regional delays) generalize better than seasonality and location.
+Even the simple rule is useful, though. Flagging the 10% of orders with the shortest estimated delivery windows catches about 41% of the late ones, roughly four times better than picking at random.
 
-## Project structure
+If this were going to production I would retrain on a rolling window, watch the late rate for drift, and look for features that describe the delivery network (carrier capacity, regional delays) rather than seasonality.
+
+Output files are in `ml/results/`: `metrics.json`, `model_comparison.csv`, `decile_table.csv`, `state_error_analysis.csv`, `permutation_importance.csv` and `pr_curves.png`.
+
+## Data quality and the decisions I made
+
+| What I found | What I did |
+|---|---|
+| Joining items and payments directly inflated revenue by about 4.5% (13.59M became 14.21M), because orders with several items or payments got duplicated | Summarized items and payments to one row per order before joining. Revenue now matches the plain sum exactly. |
+| 547 orders have more than one review | Averaged the scores to one per order and kept a review count. |
+| 8 delivered orders have no delivery date | Kept them, flagged with `has_valid_delivery`, and left them out of delivery-time numbers. I didn't fill in dates. |
+| 775 orders have no items (mostly canceled or unavailable) | Kept, with `has_items = FALSE`. |
+| 1 delivered order has no payment record | Kept, with `has_payment_record = FALSE`. |
+| 610 products have no category | Labeled `unknown` and left the other fields empty. |
+| 2 categories are missing from the translation table | Translated by hand, with a comment in the SQL. |
+| 2016 and Sep 2018 have almost no orders (2, 290, 0 and 1 in Sep to Dec 2016, and 1 in Sep 2018) | Monthly trends only use months with 500+ orders. Without this, growth rates came out in the thousands of percent. |
+| Cohorts ran into the end of the data | Retention stops at the last full month, so the final cohorts don't show a fake drop to zero. |
+| `customer_id` changes with every order, so it can't identify a returning customer | Used `customer_unique_id` for anything about repeat behavior. Using the wrong one would show a 0% repeat rate. |
+| Delivery time is heavily skewed (median 10 days, 95th percentile 29, max 210) | Report the median and percentiles instead of the average. |
+
+## Project layout
 
 ```
-sql/        numbered SQL scripts (setup, profiling, staging, analytics, analysis, ML features)
+sql/        numbered SQL scripts: setup, profiling, staging, analytics, analysis, ML features
 scripts/    load_raw.py, rebuild.py, export_dashboard_data.py
 ml/         train_late_delivery.py and its results
 app/        Streamlit dashboard
-tests/      smoke test for the ML code (synthetic data)
+tests/      smoke test for the ML code, on synthetic data
 dashboard/  exported CSVs the dashboard reads
 ```
 
-## Data quality findings and decisions
+## Possible next steps
 
-| Finding | Decision |
-|---|---|
-| 8 delivered orders have no delivery date | Kept; flagged with `has_valid_delivery`; excluded from delivery-time metrics. Dates were not filled in. |
-| 551 extra rows in `order_reviews` (547 orders have more than one review) | Averaged review scores to one row per order and kept `n_reviews`. |
-| Joining items and payments directly inflated item revenue by about 4.5% (13.59M to 14.21M) | Summarized items and payments to one row per order before joining; joined revenue now matches the direct sum exactly. |
-| 775 orders have no items (mostly unavailable or canceled) | Kept with `has_items = FALSE`. |
-| 610 products have no category or photo count | Labeled `unknown`, left other fields NULL. |
-| 2 categories missing from the translation table | Mapped by hand, with a comment in the SQL. |
-| 1 delivered order has no payment record | Kept; flagged with `has_payment_record = FALSE`. |
-| 2016 and Sep 2018 have almost no orders (2, 290, 0 and 1 orders in Sep, Oct, Nov and Dec 2016, and 1 in Sep 2018) | Monthly trends only use months with at least 500 orders. Without this rule, growth rates came out in the thousands of percent. |
-| Cohorts ran into the end of the data (the month after Aug 2018 is nearly empty) | Retention only counts activity up to the last month with 500+ orders, so cohorts do not show a fake drop to zero. |
-| Delivery time is skewed (median 10 days, 95th percentile 29, max 210) | Report median and percentiles instead of the mean. |
-
-## Roadmap
-
-- [x] Raw load, profiling, staging, analytics table
-- [x] One-command rebuild script
-- [x] SQL analysis: revenue trends, cohort retention, delivery and seller performance
-- [x] Dashboard (Streamlit, reads exported CSVs)
-- [x] Late-delivery model code with baselines, time-based validation and error analysis
-- [x] Run on the full data and add the findings and model results to this README
-
-## Provenance of the committed results
-
-The files in `dashboard/data/` and `ml/results/` were generated by running this repo's SQL on the full Olist data in a local DuckDB engine (the BigQuery SQL translated with `sqlglot`), because BigQuery could not be reached from the environment that built them. Before trusting that setup, the same pipeline was run locally and reproduced the BigQuery checks exactly (99,441 orders, 13,591,643.70 item revenue, 775 orders without items, 96,470 valid deliveries, 6,534 late). To regenerate everything against BigQuery, run `python scripts/export_dashboard_data.py` and `python ml/train_late_delivery.py`. Small differences are possible, because BigQuery's `APPROX_QUANTILES` is approximate, its distance function uses a spheroid where the local run used a sphere, and its weekday numbering starts at 1 where DuckDB's starts at 0.
+- Put the dashboard online with Streamlit Community Cloud.
+- Schedule the rebuild so the tables don't expire.
+- Try the delivery-network features mentioned above and see whether they hold up over time.
