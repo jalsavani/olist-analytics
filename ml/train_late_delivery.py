@@ -26,6 +26,11 @@ Design decisions (each one is something to defend in an interview):
 
 5. NO LEAKAGE. Features come from sql/14 and are all known at purchase time.
 
+6. MODEL CHOICE USES VALIDATION, NOT THE TEST SET. The "selected" model is the one with the best
+   cross-validated PR AUC inside the training period. The test period is only used to report
+   how that choice (and every other model) performs on later data. Choosing the winner by test
+   score would quietly turn the test set into a second validation set.
+
 Run:  python ml/train_late_delivery.py            (builds the feature table, then trains)
       python ml/train_late_delivery.py --skip-build   (reuse the existing feature table)
 """
@@ -305,9 +310,12 @@ def run_experiment(df: pd.DataFrame, out_dir: Path = RESULTS_DIR, n_cv_splits: i
     comparison = pd.DataFrame(rows).round(4)
     comparison.to_csv(out_dir / "model_comparison.csv", index=False)
 
-    # Best model among the real candidates (the prior baseline is excluded from "best").
+    # Selected model: best cross-validated PR AUC (training period only) among the real candidates.
+    # The prior baseline is excluded because it is a reference point, not a candidate.
     candidates = comparison[comparison["model"] != "baseline_prior"]
-    best_name = candidates.sort_values("pr_auc", ascending=False).iloc[0]["model"]
+    best_name = candidates.sort_values("cv_pr_auc_mean", ascending=False).iloc[0]["model"]
+    comparison["selected_by_cv"] = comparison["model"] == best_name
+    comparison.to_csv(out_dir / "model_comparison.csv", index=False)
     best_pipe, best_cols = models[best_name]
     best_score = scores[best_name]
     y_test = test[TARGET].to_numpy()
@@ -335,9 +343,11 @@ def run_experiment(df: pd.DataFrame, out_dir: Path = RESULTS_DIR, n_cv_splits: i
     # Precision-recall curves for every model on the test period.
     fig, ax = plt.subplots(figsize=(6.5, 5))
     for name, score in scores.items():
+        if name == "baseline_prior":
+            continue  # a constant score draws a misleading straight line, the dotted line below is its level
         prec, rec, _ = precision_recall_curve(y_test, score)
         ax.plot(rec, prec, label=name)
-    ax.axhline(y_test.mean(), color="grey", linestyle=":", linewidth=1)
+    ax.axhline(y_test.mean(), color="grey", linestyle=":", linewidth=1, label="no skill (test late rate)")
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     ax.set_title("Late-delivery prediction: precision-recall on the held-out period")
@@ -355,7 +365,8 @@ def run_experiment(df: pd.DataFrame, out_dir: Path = RESULTS_DIR, n_cv_splits: i
         "test_period": [str(test[TIME_COL].min()), str(test[TIME_COL].max())],
         "late_rate_train": float(train[TARGET].mean()),
         "late_rate_test": float(test[TARGET].mean()),
-        "best_model": best_name,
+        "selected_model": best_name,
+        "selection_rule": "highest cross-validated PR AUC within the training period",
         "models": comparison.to_dict(orient="records"),
     }
     (out_dir / "metrics.json").write_text(json.dumps(summary, indent=2))
@@ -368,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {len(df):,} rows")
     print("Training and evaluating ...")
     summary = run_experiment(df)
-    print(f"Best model: {summary['best_model']}")
+    print(f"Selected model (best cross-validated PR AUC): {summary['selected_model']}")
     print(f"Test late rate {summary['late_rate_test']:.4f} vs train {summary['late_rate_train']:.4f}")
     print(f"Results written to {RESULTS_DIR}")
     return 0
