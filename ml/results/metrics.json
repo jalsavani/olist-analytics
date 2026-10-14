@@ -1,0 +1,72 @@
+{
+  "generated_at_utc": "2026-10-14T14:11:07+00:00",
+  "rows": 96470,
+  "train_rows": 77176,
+  "test_rows": 19294,
+  "train_period": [
+    "2016-09-15 12:16:38+00:00",
+    "2018-05-26 18:16:57+00:00"
+  ],
+  "test_period": [
+    "2018-05-26 18:18:03+00:00",
+    "2018-08-29 15:00:37+00:00"
+  ],
+  "late_rate_train": 0.07593034103866488,
+  "late_rate_test": 0.03493313983621851,
+  "selected_model": "logistic_regression",
+  "selection_rule": "highest cross-validated PR AUC within the training period",
+  "models": [
+    {
+      "model": "baseline_prior",
+      "cv_pr_auc_mean": 0.0834,
+      "cv_pr_auc_std": 0.0478,
+      "roc_auc": 0.5,
+      "pr_auc": 0.0349,
+      "late_rate_test": 0.0349,
+      "top10_flagged_orders": 1929,
+      "top10_precision": 0.0052,
+      "top10_recall": 0.0148,
+      "top10_lift": 0.1484,
+      "selected_by_cv": false
+    },
+    {
+      "model": "logistic_estimated_days_only",
+      "cv_pr_auc_mean": 0.0782,
+      "cv_pr_auc_std": 0.0418,
+      "roc_auc": 0.7503,
+      "pr_auc": 0.1203,
+      "late_rate_test": 0.0349,
+      "top10_flagged_orders": 1929,
+      "top10_precision": 0.1431,
+      "top10_recall": 0.4095,
+      "top10_lift": 4.0958,
+      "selected_by_cv": false
+    },
+    {
+      "model": "logistic_regression",
+      "cv_pr_auc_mean": 0.1615,
+      "cv_pr_auc_std": 0.0892,
+      "roc_auc": 0.7066,
+      "pr_auc": 0.0764,
+      "late_rate_test": 0.0349,
+      "top10_flagged_orders": 1929,
+      "top10_precision": 0.0793,
+      "top10_recall": 0.227,
+      "top10_lift": 2.2705,
+      "selected_by_cv": true
+    },
+    {
+      "model": "hist_gradient_boosting",
+      "cv_pr_auc_mean": 0.1488,
+      "cv_pr_auc_std": 0.0757,
+      "roc_auc": 0.6956,
+      "pr_auc": 0.0646,
+      "late_rate_test": 0.0349,
+      "top10_flagged_orders": 1929,
+      "top10_precision": 0.0715,
+      "top10_recall": 0.2047,
+      "top10_lift": 2.0479,
+      "selected_by_cv": false
+    }
+  ]
+}

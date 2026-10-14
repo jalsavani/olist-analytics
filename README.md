@@ -2,7 +2,7 @@
 
 An end-to-end SQL and machine learning project on the Olist Brazilian e-commerce dataset, built on Google BigQuery. The goal: turn nine messy relational tables into a clean, trustworthy, one-row-per-order table that supports business analysis and a prediction model.
 
-**Status:** data engineering layer complete and verified. SQL analysis, dashboard and late-delivery model are written and tested on synthetic data. Real-data results are produced by running the steps under [Run the analysis](#run-the-analysis).
+**Status:** complete. Pipeline, SQL analysis, dashboard and late-delivery model are built, and results are in `dashboard/data/` and `ml/results/`. See [Findings](#findings) and [Late-delivery model](#late-delivery-model).
 
 ## Data
 
@@ -63,6 +63,16 @@ What each piece answers:
 | `sql/13_analysis_seller_performance.sql` | Which sellers drive revenue, and how concentrated is it? |
 | `sql/14_ml_late_delivery_features.sql` | What is known at purchase time that could predict a late delivery? |
 
+## Findings
+
+All figures come from the queries in `sql/10` to `sql/13` (exported to `dashboard/data/`). Revenue means item price, excluding freight and canceled or unavailable orders. Trend figures cover Jan 2017 to Aug 2018, because 2016 and Sep 2018 have too few orders to read (see the data quality table).
+
+- **Revenue grew through 2017 and then held at a plateau.** Item revenue was 13.45M over 97,905 orders (average order 137.37). November 2017 was the peak at about 1.00M, up 52.1% on October. In Jan to Aug 2018 monthly revenue stayed between 0.84M and 0.99M, and August 2018 was 1.49x August 2017. The biggest categories were health_beauty (1.26M), watches_gifts (1.20M) and bed_bath_table (1.04M).
+- **Few customers come back.** Only 3.04% of customers (2,887 of 94,983) ordered more than once. In cohorts of 1,000+ customers, between 0.22% and 0.71% ordered again in the following month.
+- **Revenue is concentrated in a small group of sellers.** The top 10% of sellers earn 67.5% of revenue and the top 20% earn 82.6%. The bottom half together earn 3.3%.
+- **Late delivery wrecks reviews.** Orders delivered late average a 2.27 review score against 4.29 for on-time orders, and 62.4% of late orders get a low score (2 or below) against 9.2% of on-time orders.
+- **Lateness is concentrated in time and place.** Overall 6.77% of delivered orders were late, but the monthly rate hit 12.4% in Nov 2017, 14.1% in Feb 2018 and 19.0% in Mar 2018, then fell to 1.2% by Jun 2018. By state, Alagoas had the highest late rate at 21.4% (median delivery 22 days), then Maranhao at 17.4% and Sergipe at 15.2%, against 4.5% and a 7-day median in Sao Paulo.
+
 ## Late-delivery model
 
 Goal: flag orders likely to arrive late at the moment they are placed.
@@ -74,6 +84,26 @@ Goal: flag orders likely to arrive late at the moment they are placed.
 - **Error analysis**: calibration by risk decile and by state, plus permutation feature importance.
 
 Output files are in `ml/results/` (`metrics.json`, `model_comparison.csv`, `decile_table.csv`, `state_error_analysis.csv`, `permutation_importance.csv`, `pr_curves.png`).
+
+### Results
+
+Trained on 77,176 orders up to 26 May 2018 and tested on the 19,294 orders after that. The late rate fell from 7.6% in the training period to 3.5% in the test period.
+
+| Model | Cross-validated PR AUC (training period) | Test PR AUC | Test ROC AUC | Late orders caught in riskiest 10% | Lift |
+|---|---|---|---|---|---|
+| Always predict the training late rate | 0.083 | 0.035 | 0.500 | 1.5% | 0.1x |
+| Logistic regression, estimated delivery days only | 0.078 | 0.120 | 0.750 | 40.9% | 4.1x |
+| Logistic regression, all features (selected) | 0.162 | 0.076 | 0.707 | 22.7% | 2.3x |
+| Gradient boosting, all features | 0.149 | 0.065 | 0.696 | 20.5% | 2.0x |
+
+What this shows:
+
+- **The richer models win in validation but lose on later data.** Inside the training period, using all features roughly doubles the cross-validated PR AUC compared with the baselines. On the final held-out period the one-feature model beats them.
+- **A simple rule is genuinely useful.** Flagging the 10% of orders with the shortest estimated delivery windows catches 41% of late orders, 4.1 times better than flagging at random.
+- **Likely reason (a hypothesis, not proven here): conditions changed.** The training period contains the Nov 2017 to Mar 2018 delay spike and the test period is calm. The all-features model over-predicts lateness in test for several northeastern states (for example it predicts 24% for Alagoas against 6% actual), which fits that explanation. `ml/results/state_error_analysis.csv` has the full breakdown.
+- **Model choice used validation data only.** The all-features logistic regression was selected by its cross-validation score alone. Test results are reported for every model, and no hyperparameters were tuned against the test period.
+
+Next steps if this were going to production: retrain on a rolling window, monitor the late rate for drift, and test whether features that describe the delivery network (carrier capacity, regional delays) generalize better than seasonality and location.
 
 ## Project structure
 
@@ -97,6 +127,8 @@ dashboard/  exported CSVs the dashboard reads
 | 610 products have no category or photo count | Labeled `unknown`, left other fields NULL. |
 | 2 categories missing from the translation table | Mapped by hand, with a comment in the SQL. |
 | 1 delivered order has no payment record | Kept; flagged with `has_payment_record = FALSE`. |
+| 2016 and Sep 2018 have almost no orders (2, 290, 0 and 1 orders in Sep, Oct, Nov and Dec 2016, and 1 in Sep 2018) | Monthly trends only use months with at least 500 orders. Without this rule, growth rates came out in the thousands of percent. |
+| Cohorts ran into the end of the data (the month after Aug 2018 is nearly empty) | Retention only counts activity up to the last month with 500+ orders, so cohorts do not show a fake drop to zero. |
 | Delivery time is skewed (median 10 days, 95th percentile 29, max 210) | Report median and percentiles instead of the mean. |
 
 ## Roadmap
@@ -106,4 +138,8 @@ dashboard/  exported CSVs the dashboard reads
 - [x] SQL analysis: revenue trends, cohort retention, delivery and seller performance
 - [x] Dashboard (Streamlit, reads exported CSVs)
 - [x] Late-delivery model code with baselines, time-based validation and error analysis
-- [ ] Run on the full data, then add the headline findings and model results to this README
+- [x] Run on the full data and add the findings and model results to this README
+
+## Provenance of the committed results
+
+The files in `dashboard/data/` and `ml/results/` were generated by running this repo's SQL on the full Olist data in a local DuckDB engine (the BigQuery SQL translated with `sqlglot`), because BigQuery could not be reached from the environment that built them. Before trusting that setup, the same pipeline was run locally and reproduced the BigQuery checks exactly (99,441 orders, 13,591,643.70 item revenue, 775 orders without items, 96,470 valid deliveries, 6,534 late). To regenerate everything against BigQuery, run `python scripts/export_dashboard_data.py` and `python ml/train_late_delivery.py`. Small differences are possible, because BigQuery's `APPROX_QUANTILES` is approximate, its distance function uses a spheroid where the local run used a sphere, and its weekday numbering starts at 1 where DuckDB's starts at 0.
