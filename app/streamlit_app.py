@@ -57,8 +57,9 @@ with tab_rev:
     monthly = data("monthly_revenue")
     if need(monthly, "monthly_revenue"):
         monthly["purchase_month"] = pd.to_datetime(monthly["purchase_month"])
+        period = f"{monthly['purchase_month'].min():%b %Y} to {monthly['purchase_month'].max():%b %Y}"
         c1, c2, c3 = st.columns(3)
-        c1.metric("Total revenue", f"{monthly['revenue'].sum():,.0f}")
+        c1.metric(f"Revenue ({period})", f"{monthly['revenue'].sum():,.0f}")
         c2.metric("Orders", f"{monthly['orders'].sum():,}")
         c3.metric("Average order value", f"{monthly['revenue'].sum() / monthly['orders'].sum():,.2f}")
 
@@ -75,7 +76,7 @@ with tab_rev:
             width="stretch",
         )
         st.caption(
-            "The first and last months of the dataset may be partial, so read growth rates for those months with care."
+            "Only months with at least 500 orders are shown. 2016 and Sep 2018 have too few orders for meaningful trends."
         )
 
     left, right = st.columns(2)
@@ -239,11 +240,14 @@ with tab_ml:
             f"training and {m['late_rate_test']:.1%} in the test period."
         )
         comp = pd.read_csv(ML_DIR / "model_comparison.csv")
-        st.write(f"**Best model on the test period:** `{m['best_model']}`")
+        st.write(f"**Selected model** (best cross-validated PR AUC in the training period): `{m['selected_model']}`")
         st.dataframe(comp, hide_index=True, width="stretch")
         st.caption(
-            "PR AUC is the main metric because late orders are a minority. A model with no skill scores "
-            "about the late rate. top10 columns show what happens if only the 10 percent highest-risk orders are flagged."
+            "cv_pr_auc columns come from time-series cross-validation inside the training period. The other metrics are on the "
+            "later test period. PR AUC is the main metric because late orders are a minority, so a model with no skill scores "
+            "about the late rate. top10 columns show what happens if only the 10 percent highest-risk orders are flagged. "
+            "Compare the cross-validated and test columns: a model that wins in validation but not on later data is a sign "
+            "that conditions changed between the periods."
         )
 
         left, right = st.columns(2)
