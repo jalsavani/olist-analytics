@@ -90,7 +90,7 @@ Trained on 77,176 orders up to 26 May 2018 and tested on the 19,294 after that. 
 | Always predict the average late rate | 0.083 | 0.035 | 0.500 | 1.5% | 0.1x |
 | Logistic regression, estimated days only | 0.078 | 0.120 | 0.750 | 40.9% | 4.1x |
 | Logistic regression, all features (picked by CV) | 0.162 | 0.076 | 0.707 | 22.7% | 2.3x |
-| Gradient boosting, all features | 0.149 | 0.065 | 0.696 | 20.5% | 2.0x |
+| Gradient boosting, all features | 0.148 | 0.066 | 0.695 | 21.2% | 2.1x |
 
 The honest takeaway is that the fancier models did not win. Using every feature roughly doubled the cross-validation score, but on the later test period the one-feature model was better than both of them.
 
